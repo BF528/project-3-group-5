@@ -4,9 +4,9 @@ A brief description of what this repository is for and what it contains
 
 # Contributors
 
-Data Curator: Evie Wan
-Programmer: Eetu Eklund
-Analyst: Salam AlAbdullatif
+Data Curator: Evie Wan \
+Programmer: Eetu Eklund \
+Analyst: Salam AlAbdullatif \
 Biologist: Mary Yohannes
 
 # Repository Contents
