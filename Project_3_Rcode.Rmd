@@ -1,0 +1,561 @@
+---
+title: "Project 3: Concordance of microarray and RNA-Seq differential gene expression"
+author: "Mary T. Yohannes, Salam AlAbdullatif, Eetu Eklund, Evie Wan"
+date: "4/10/2020"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library("dplyr")
+library("limma")
+library("ggplot2")
+library("DESeq2")
+```
+
+# Read counts 
+```{r}
+SRR1177963 <- read.csv("../salam/SRR1177963.csv")
+SRR1177964 <- read.csv("../salam/SRR1177964.csv")
+SRR1177965 <- read.csv("../salam/SRR1177965.csv")
+SRR1177978 <- read.csv("../salam/SRR1177978.csv")
+SRR1177979 <- read.csv("../salam/SRR1177979.csv")
+SRR1177980 <- read.csv("../salam/SRR1177980.csv")
+SRR1178015 <- read.csv("../salam/SRR1178015.csv")
+SRR1178022 <- read.csv("../salam/SRR1178022.csv")
+SRR1178048 <- read.csv("../salam/SRR1178048.csv")
+genes <- SRR1178048[, 1]
+combined <- data.frame(gene_id = genes, SRR1177963[, 7], SRR1177964[, 7], SRR1177965[, 7],
+    SRR1177978[, 7], SRR1177979[, 7], SRR1177980[, 7], SRR1178015[, 7], SRR1178022[, 7], SRR1178048[, 7])
+colnames(combined) <- c("gene_id", "SRR1177963", "SRR1177964", "SRR1177965",
+    "SRR1177978", "SRR1177979", "SRR1177980", "SRR1178015", "SRR1178022", "SRR1178048")
+write.csv(combined, "counts.csv")
+boxplot(combined[, 2:10], breaks = 50)
+
+control_counts <- read.csv("../salam/control_counts.csv")
+metadata <- read.csv("../salam/toxgroup_5_rna_info.csv")
+rownames(combined) <- combined[, 1]
+combined <- combined[, 2:10]
+rownames(control_counts) <- control_counts[, 1]
+control_counts <- control_counts[, which(colnames(control_counts) %in% metadata$Run)]
+counts <- cbind(combined, control_counts)
+write.csv(combined, "../salam/counts.csv")
+write.csv(counts, "../salam/counts_control_combined.csv")
+```
+
+# DESeq2 differential expression of RNA-Seq
+```{r}
+# load counts
+cnts <- read.csv('../salam/counts_control_combined.csv',row.names=1)
+# sample information
+info <- read.csv('../salam/toxgroup_5_rna_info.csv')
+
+info <- info[which(info$mode_of_action %in% c("CAR/PXR", "Control")),]
+info <- info[which(info$vehicle == info[1,]$vehicle),]
+cnts <- cnts[, which(colnames(cnts) %in% (info$Run))]
+
+# filter out rows that have any zeros for funzies
+cnts <- subset(cnts,rowSums(cnts==0)==0)
+
+# create the DESeq object
+dds <- DESeqDataSetFromMatrix(
+  countData = cnts,
+  colData = info,
+  design= ~ mode_of_action
+)
+
+# relevel mode_of_action as factor
+dds$mode_of_action <- relevel(dds$mode_of_action, ref='Control')
+
+# run DESeq
+dds <- DESeq(dds)
+res <- results(dds, contrast=c("mode_of_action", "CAR/PXR", "Control"))
+res <- lfcShrink(dds, coef=2)
+res <- res[which(res$padj < 0.05),]
+res <- res[order(res$padj),]
+
+# write out DE results
+write.csv(res,'../salam/deseq_CAR_PXR_results.csv')
+
+# write out matrix of normalized counts
+write.csv(counts(dds,normalized=TRUE),'../salam/deseq_CAR_PXR_norm_counts.csv')
+
+res_car <- res
+df_car <- data.frame(logFC = res_car$log2FoldChange, pval = res_car$pvalue)
+ggplot(df_car, aes(x=logFC, y=-log10(pval))) + geom_point(size=.25) +
+  labs(title="CAR / PXR",x="Log2 Fold Change", y = "-log10(P-Value)") + theme_classic() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+cnts <- read.csv('../salam/counts_control_combined.csv',row.names=1)
+# sample information
+info <- read.csv('../salam/toxgroup_5_rna_info.csv')
+
+info <- info[which(info$mode_of_action %in% c("DNA_Damage", "Control")),]
+info <- info[which(info$vehicle == info[1,]$vehicle),]
+cnts <- cnts[, which(colnames(cnts) %in% (info$Run))]
+
+# filter out rows that have any zeros for funzies
+cnts <- subset(cnts,rowSums(cnts==0)==0)
+
+# create the DESeq object
+dds <- DESeqDataSetFromMatrix(
+  countData = cnts,
+  colData = info,
+  design= ~ mode_of_action
+)
+
+# relevel mode_of_action as factor
+dds$mode_of_action <- relevel(dds$mode_of_action, ref='Control')
+
+# run DESeq
+dds <- DESeq(dds)
+res <- results(dds, contrast=c("mode_of_action", "DNA_Damage", "Control"))
+res <- lfcShrink(dds, coef=2)
+res <- res[which(res$padj < 0.05),]
+res <- res[order(res$padj),]
+
+# write out DE results
+write.csv(res,'../salam/deseq_DNA_Damage_results.csv')
+
+# write out matrix of normalized counts
+write.csv(counts(dds,normalized=TRUE),'../salam/deseq_DNA_Damage_norm_counts.csv')
+
+res_dna <- res 
+df_dna <- data.frame(logFC = res_dna$log2FoldChange, pval = res_dna$pvalue)
+
+ggplot(df_dna, aes(x=logFC, y=-log10(pval))) + geom_point(size=.25) +
+    labs(title="DNA Damage",x="Log2 Fold Change", y = "-log10(P-Value)") + theme_classic() +
+    theme(plot.title = element_text(hjust = 0.5))
+
+# load counts
+cnts <- read.csv('../salam/counts_control_combined.csv',row.names=1)
+# sample information
+info <- read.csv('../salam/toxgroup_5_rna_info.csv')
+
+info <- info[which(info$mode_of_action %in% c("PPARA", "Control")),]
+info <- info[which(info$vehicle == info[1,]$vehicle),]
+cnts <- cnts[, which(colnames(cnts) %in% (info$Run))]
+
+# filter out rows that have any zeros for funzies
+cnts <- subset(cnts,rowSums(cnts==0)==0)
+
+# create the DESeq object
+dds <- DESeqDataSetFromMatrix(
+  countData = cnts,
+  colData = info,
+  design= ~ mode_of_action
+)
+
+# relevel mode_of_action as factor
+dds$mode_of_action <- relevel(dds$mode_of_action, ref='Control')
+
+# run DESeq
+dds <- DESeq(dds)
+res <- results(dds, contrast=c("mode_of_action", "PPARA", "Control"))
+res <- lfcShrink(dds, coef=2)
+res <- res[which(res$padj < 0.05),]
+res <- res[order(res$padj),]
+
+# write out DE results
+write.csv(res,'../salam/deseq_PPARA_results.csv')
+
+# write out matrix of normalized counts
+write.csv(counts(dds,normalized=TRUE),'../salam/deseq_PPARA_norm_counts.csv')
+
+res_ppara <- res
+df_ppara <- data.frame(logFC = res_ppara$log2FoldChange, pval = res_ppara$pvalue)
+
+ggplot(df_ppara, aes(x=logFC, y=-log10(pval))) + geom_point(size=.25) +
+    labs(title="PPARA",x="Log2 Fold Change", y = "-log10(P-Value)") + theme_classic() +
+    theme(plot.title = element_text(hjust = 0.5))
+```
+
+
+# limma Aflatoxin
+```{r}
+# sample info dataframe with array_id and chemical columns
+#samples <- read.csv('groups/group_5_mic_info.csv',as.is=TRUE)
+samples <- read.csv("/project/bf528/project_3/groups/group_5_mic_info.csv",as.is=TRUE)
+samples <- samples[which(samples$chemical %in% c("AFLATOXIN_B1", "Control")),]
+
+# the full RMA normalized matrix of all experiments
+rma <- read.table('/projectnb/bf528/project_3/samples/liver-normalization-rma.txt',
+                  sep='\t',
+                  as.is=TRUE,
+                  header=TRUE,
+                  row.names=1)
+
+# subset the full expression matrix to just those in this comparison
+rma.subset <- rma[paste0('X',samples$array_id)]
+
+### CHANGE design to be for each treatment instead of all of them. this means we do the analysis a total of 4 times.
+
+# construct a design matrix modeling treatment vs control for use by limma
+design <- model.matrix(
+  ~factor(
+    samples$chemical,
+    levels=c('Control','AFLATOXIN_B1')#,'MICONAZOLE', 'PIRINIXIC_ACID')
+  )
+)
+colnames(design) <- c('Intercept','AFLATOXIN_B1')#,'MICONAZOLE', 'PIRINIXIC_ACID')
+
+# run limma
+fit <- lmFit(rma.subset, design)
+fit <- eBayes(fit)
+t <- topTable(fit, coef=2, n=nrow(rma.subset), adjust='BH')
+
+# write out the results to file
+t2<- t[order(t$adj.P.Val),]
+write.csv(t2,'limma_results_sorted_AFLATOXIN_B1.csv')
+```
+
+# limma MICONAZOLE
+```{r}
+samples <- read.csv('/project/bf528/project_3/groups/group_5_mic_info.csv',as.is=TRUE)
+samples <- samples[which(samples$chemical %in% c("MICONAZOLE", "Control")),]
+
+# the full RMA normalized matrix of all experiments
+rma <- read.table('/projectnb/bf528/project_3/samples/liver-normalization-rma.txt',
+                  sep='\t',
+                  as.is=TRUE,
+                  header=TRUE,
+                  row.names=1)
+
+# subset the full expression matrix to just those in this comparison
+rma.subset <- rma[paste0('X',samples$array_id)]
+
+# construct a design matrix modeling treatment vs control for use by limma
+design <- model.matrix(
+  ~factor(
+    samples$chemical,
+    levels=c('Control','MICONAZOLE')#,'MICONAZOLE', 'PIRINIXIC_ACID')
+  )
+)
+colnames(design) <- c('Intercept','MICONAZOLE')#,'MICONAZOLE', 'PIRINIXIC_ACID')
+
+# run limma
+fit <- lmFit(rma.subset, design)
+fit <- eBayes(fit)
+t <- topTable(fit, coef=2, n=nrow(rma.subset), adjust='BH')
+
+# write out the results to file
+t2<- t[order(t$adj.P.Val),]
+write.csv(t2,'limma_results_MICONAZOLE.csv')
+```
+
+# limma Pirinixic Acid
+```{r}
+samples <- read.csv('/project/bf528/project_3/groups/group_5_mic_info.csv',as.is=TRUE)
+samples <- samples[which(samples$chemical %in% c("PIRINIXIC_ACID", "Control")),]
+
+# the full RMA normalized matrix of all experiments
+rma <- read.table('/projectnb/bf528/project_3/samples/liver-normalization-rma.txt',
+                  sep='\t',
+                  as.is=TRUE,
+                  header=TRUE,
+                  row.names=1)
+
+# subset the full expression matrix to just those in this comparison
+rma.subset <- rma[paste0('X',samples$array_id)]
+
+# construct a design matrix modeling treatment vs control for use by limma
+design <- model.matrix(
+  ~factor(
+    samples$chemical,
+    levels=c('Control','PIRINIXIC_ACID')#,'MICONAZOLE', 'PIRINIXIC_ACID')
+  )
+)
+colnames(design) <- c('Intercept','PIRINIXIC_ACID')#,'MICONAZOLE', 'PIRINIXIC_ACID')
+
+# run limma
+fit <- lmFit(rma.subset, design)
+fit <- eBayes(fit)
+t <- topTable(fit, coef=2, n=nrow(rma.subset), adjust='BH')
+
+# write out the results to file
+t2<- t[order(t$adj.P.Val),]
+write.csv(t2,'limma_results_PIRINIXIC_ACID.csv')
+```
+
+# Limma graphs
+```{r}
+A <- read.csv('limma_results_sorted_AFLATOXIN_B1.csv', header=TRUE)
+M <- read.csv('limma_results_MICONAZOLE.csv', header=TRUE)
+P <- read.csv('limma_results_PIRINIXIC_ACID.csv', header=TRUE)
+
+# creating histograms
+ggplot(A[which(A$adj.P.Val<0.05),], aes(x=logFC)) + geom_histogram(bins = 200) +
+labs(title="AFLATOXIN B1",x="Log2 Fold Change", y = "Count") + theme_classic() +
+theme(plot.title = element_text(hjust = 0.5))
+
+ggplot(M[which(M$adj.P.Val<0.05),], aes(x=logFC)) + geom_histogram(bins = 200) +
+labs(title="MICONAZOLE",x="Log2 Fold Change", y = "Count") + theme_classic() +
+theme(plot.title = element_text(hjust = 0.5))
+
+ggplot(P[which(P$adj.P.Val<0.05),], aes(x=logFC)) + geom_histogram(bins = 200) +
+labs(title="PIRINIXIC ACID",x="Log2 Fold Change", y = "Count") + theme_classic() +
+theme(plot.title = element_text(hjust = 0.5))
+
+# creating scatterplots
+ggplot(A, aes(x=logFC, y=-log10(P.Value))) + geom_point(size=.25) +
+labs(title="AFLATOXIN B1",x="Log2 Fold Change", y = "-log10(P-Value)") + theme_classic() +
+theme(plot.title = element_text(hjust = 0.5))
+
+ggplot(M, aes(x=logFC, y=-log10(P.Value))) + geom_point(size=.25) +
+labs(title="MICONAZOLE",x="Log2 Fold Change", y = "-log10(P-Value)") + theme_classic() +
+theme(plot.title = element_text(hjust = 0.5))
+
+ggplot(P, aes(x=logFC, y=-log10(P.Value))) + geom_point(size=.25) +
+labs(title="PIRINIXIC ACID",x="Log2 Fold Change", y = "-log10(P-Value)") + theme_classic() +
+theme(plot.title = element_text(hjust = 0.5))
+```
+
+# calculating concordance
+```{r}
+# only need REFSEQ and PROBEID
+map <- read.csv('/project/bf528/project_3/refseq_affy_map.csv',header=TRUE, sep = ",")[ ,c('REFSEQ', 'PROBEID')]
+
+# AFLATOXIN_B1
+mic1 <- read.csv('limma_results_sorted_AFLATOXIN_B1.csv', header=TRUE, sep = ",")
+rna_seq1 <- read.csv('../salam/deseq_output/deseq_DNA_Damage_results.csv', header=TRUE, sep = ",")
+
+# MICONAZOLE
+mic2 <- read.csv('limma_results_MICONAZOLE.csv', header=TRUE, sep = ",")
+rna_seq2 <- read.csv('../salam/deseq_output/deseq_CAR_PXR_results.csv', header=TRUE, sep = ",")
+
+# PIRINIXIC_ACID
+mic3 <- read.csv('limma_results_PIRINIXIC_ACID.csv', header=TRUE, sep = ",")
+rna_seq3 <- read.csv('../salam/deseq_output/deseq_PPARA_results.csv', header=TRUE, sep = ",")
+
+# Transform mic where it maps 8 times
+#mic1 <- mic1[which(mic1[,1] %in% map$PROBEID >=8),]
+
+# Filtering to uncorrected P-value < 0.05
+mic1 <- mic1[which(mic1$P.Value<0.05),] #& abs(mic$logFC) >1.5),]
+rna_seq1 <- rna_seq1[which(rna_seq1$pvalue<0.05),] #& abs(rna_seq$log2FoldChange) >1.5),]
+
+mic2 <- mic2[which(mic2$P.Value<0.05),] #& abs(mic$logFC) >1.5),]
+rna_seq2 <- rna_seq2[which(rna_seq2$pvalue<0.05),]
+
+mic3 <- mic3[which(mic3$P.Value<0.05),] #& abs(mic$logFC) >1.5),]
+rna_seq3 <- rna_seq3[which(rna_seq3$pvalue<0.05),]
+
+# count number of times mic maps to rna_seq using the map as a connector
+matched1 <- map[which(map$PROBEID %in% mic1[,1] & map$REFSEQ %in% rna_seq1[,1]),]
+matched2 <- map[which(map$PROBEID %in% mic2[,1] & map$REFSEQ %in% rna_seq2[,1]),]
+matched3 <- map[which(map$PROBEID %in% mic3[,1] & map$REFSEQ %in% rna_seq3[,1]),]
+
+
+#Letting N be the number of items in the whole sets,
+# n1 and n2 be the numbers of items in two independent sets,
+# Number of items in intersection: n1*n2/N
+# n0 is the number of items in the observed intersection
+N1<-nrow(mic1) # whole set
+n1.1<-nrow(matched1) # independent set
+n2.1<-nrow(rna_seq1) # independent set
+n0.1 <- (n1.1*n2.1)/N1 # intersection
+concordance1 <- 2*n0.1/(n1.1+n2.1)
+
+N2<-nrow(mic2) # whole set
+n1.2<-nrow(matched2) # independent set
+n2.2<-nrow(rna_seq2) # independent set
+n0.2 <- (n1.2*n2.2)/N2 # intersection
+concordance2 <- 2*n0.2/(n1.2+n2.2)
+
+N3<-nrow(mic3) # whole set
+n1.3<-nrow(matched3) # independent set
+n2.3<-nrow(rna_seq3) # independent set
+n0.3 <- (n1.3*n2.3)/N3 # intersection
+concordance3 <- 2*n0.3/(n1.3+n2.3)
+
+conc <- c(concordance1, concordance2, concordance3,concordance1, concordance2, concordance3)
+conc_hist <- c(concordance1, concordance2, concordance3)
+mic<-c(N1,N2,N3)
+rna_seq<-c(n2.1,n2.2,n2.3)
+comb1<-c(N1,N2,N3,n2.1,n2.2,n2.3)
+print(conc)
+
+df1<-data.frame(mic,conc)
+df2<-data.frame(rna_seq,conc)
+df_comb1 <-data.frame(comb1,conc)
+Name<-c("AFLATOXIN_B1 (MIC)", "MICONAZOLE (MIC)", "PIRINIXIC_ACID (MIC)","AFLATOXIN_B1 (RNA)", "MICONAZOLE (RNA)", "PIRINIXIC_ACID (RNA)")
+
+# plotting concordance
+ggplot(df_comb1, aes(x=comb1, y=conc)) + geom_point(size=3) +
+  labs(title="Concordance vs # DE genes in Microarray or RNA_SEQ",x="# DE genes in set", y = "Concordance") + theme_classic() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  geom_text(aes(label=Name),hjust=0, vjust=-.5) + xlim(0, 15500) + ylim(.1, .55)
+
+# separate based on above and below median
+mic1_below <- mic1[which(mic1$AveExpr<median(mic1$AveExpr)),]
+rna_seq1_below <- rna_seq1[which(rna_seq1$baseMean<median(rna_seq1$baseMean)),]
+mic1_above <- mic1[which(mic1$AveExpr>median(mic1$AveExpr)),]
+rna_seq1_above <- rna_seq1[which(rna_seq1$baseMean>median(rna_seq1$baseMean)),]
+
+mic2_below <- mic2[which(mic2$AveExpr<median(mic2$AveExpr)),]
+rna_seq2_below <- rna_seq2[which(rna_seq2$baseMean<median(rna_seq2$baseMean)),]
+mic2_above <- mic2[which(mic2$AveExpr>median(mic2$AveExpr)),]
+rna_seq2_above <- rna_seq2[which(rna_seq2$baseMean>median(rna_seq2$baseMean)),]
+
+mic3_below <- mic3[which(mic3$AveExpr<median(mic3$AveExpr)),]
+rna_seq3_below <- rna_seq3[which(rna_seq3$baseMean<median(rna_seq3$baseMean)),]
+mic3_above <- mic3[which(mic3$AveExpr>median(mic3$AveExpr)),]
+rna_seq3_above <- rna_seq3[which(rna_seq3$baseMean>median(rna_seq3$baseMean)),]
+
+# matched below
+matched1_below <- map[which(map$PROBEID %in% mic1_below[,1] & map$REFSEQ %in% rna_seq1_below[,1]),]
+matched2_below <- map[which(map$PROBEID %in% mic2_below[,1] & map$REFSEQ %in% rna_seq2_below[,1]),]
+matched3_below <- map[which(map$PROBEID %in% mic3_below[,1] & map$REFSEQ %in% rna_seq3_below[,1]),]
+
+# matched above
+matched1_above <- map[which(map$PROBEID %in% mic1_above[,1] & map$REFSEQ %in% rna_seq1_above[,1]),]
+matched2_above <- map[which(map$PROBEID %in% mic2_above[,1] & map$REFSEQ %in% rna_seq2_above[,1]),]
+matched3_above <- map[which(map$PROBEID %in% mic3_above[,1] & map$REFSEQ %in% rna_seq3_above[,1]),]
+
+# below concordance
+N1_below<-nrow(mic1_below) # whole set
+n1.1_below<-nrow(matched1_below) # independent set
+n2.1_below<-nrow(rna_seq1_below) # independent set
+n0.1_below <- (n1.1_below*n2.1_below)/N1_below # intersection
+concordance1_below <- 2*n0.1_below/(n1.1_below+n2.1_below)
+
+N2_below<-nrow(mic2_below) # whole set
+n1.2_below<-nrow(matched2_below) # independent set
+n2.2_below<-nrow(rna_seq2_below) # independent set
+n0.2_below <- (n1.2_below*n2.2_below)/N2_below # intersection
+concordance2_below <- 2*n0.2_below/(n1.2_below+n2.2_below)
+
+N3_below<-nrow(mic3_below) # whole set
+n1.3_below<-nrow(matched3_below) # independent set
+n2.3_below<-nrow(rna_seq3_below) # independent set
+n0.3_below <- (n1.3_below*n2.3_below)/N3_below # intersection
+concordance3_below <- 2*n0.3_below/(n1.3_below+n2.3_below)
+
+
+# above concordance
+N1_above<-nrow(mic1_above) # whole set
+n1.1_above<-nrow(matched1_above) # independent set
+n2.1_above<-nrow(rna_seq1_above) # independent set
+n0.1_above <- (n1.1_above*n2.1_above)/N1_above # intersection
+concordance1_above <- 2*n0.1_above/(n1.1_above+n2.1_above)
+N2_above<-nrow(mic2_above) # whole set
+n1.2_above<-nrow(matched2_above) # independent set
+n2.2_above<-nrow(rna_seq2_above) # independent set
+n0.2_above <- (n1.2_above*n2.2_above)/N2_above # intersection
+concordance2_above <- 2*n0.2_above/(n1.2_above+n2.2_above)
+
+N3_above<-nrow(mic3_above) # whole set
+n1.3_above<-nrow(matched3_above) # independent set
+n2.3_above<-nrow(rna_seq3_above) # independent set
+n0.3_above <- (n1.3_above*n2.3_above)/N3_above # intersection
+concordance3_above <- 2*n0.3_above/(n1.3_above+n2.3_above)
+
+# below median concordance into data frame
+conc_below <- c(concordance1_below, concordance2_below, concordance3_below, concordance1_below, concordance2_below, concordance3_below)
+conc_below_hist <- c(concordance1_below, concordance2_below, concordance3_below)
+mic_below<-c(N1_below,N2_below,N3_below)
+rna_seq_below<-c(n2.1_below,n2.2_below,n2.3_below)
+comb2 <- c(mic_below, rna_seq_below)
+
+df1_below<-data.frame(mic_below,conc_below)
+df2_below<-data.frame(rna_seq_below,conc_below)
+df_comb2 <-data.frame(comb2,conc_below)
+
+# above median concordance into data frame
+conc_above <- c(concordance1_above, concordance2_above, concordance3_above, concordance1_above, concordance2_above, concordance3_above)
+conc_above_hist <- c(concordance1_above, concordance2_above, concordance3_above)
+mic_above<-c(N1_above,N2_above,N3_above)
+rna_seq_above<-c(n2.1_above,n2.2_above,n2.3_above)
+comb3 <- c(mic_above, rna_seq_above)
+
+
+df1_above<-data.frame(mic_above,conc_above)
+df2_above<-data.frame(rna_seq_above,conc_above)
+df_comb3 <-data.frame(comb3,conc)
+
+# plotting below
+ggplot(df_comb2, aes(x=comb2, y=conc_below)) + geom_point(size=3) +
+  labs(title="Concordance vs Microarray and RNA SEQ Below Median",x="# DE genes in set", y = "Concordance") + theme_classic() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  geom_text(aes(label=Name),hjust=0, vjust=-.5) + xlim(0,8000) + ylim(.1, .55)
+
+# plotting above
+ggplot(df_comb3, aes(x=comb3, y=conc_above)) + geom_point(size=3) +
+  labs(title="Concordance vs Microarray and RNA SEQ Above Median",x="# DE genes in set", y = "Concordance") + theme_classic() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  geom_text(aes(label=Name),hjust=0, vjust=-.5) + xlim(0,8000) + ylim(.1, .55)
+
+# making histogram of results
+condition <- c("All", "All", "All", "Below Median" , "Below Median", "Below Median", "Above Median", "Above Median", "Above Median")
+chemical <- c("AFLATOXIN_B1", "MICONAZOLE", "PIRINIXIC_ACID","AFLATOXIN_B1", "MICONAZOLE", "PIRINIXIC_ACID","AFLATOXIN_B1", "MICONAZOLE", "PIRINIXIC_ACID")
+values<-c(conc_hist, conc_below_hist, conc_above_hist)
+
+data<-data.frame(chemical, condition,values)
+
+ggplot(data, aes(fill=condition, y=values, x=chemical)) +
+  geom_bar(position="dodge", stat="identity") +
+  labs(title="Concordance For Each Condition",x="Chemical", y = "Concordance") + theme_classic() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+
+```
+
+# gene set enrichment analysis 
+```{r GSE}
+#read in the filtered data (padj < 0.05) 
+CARPXR <- read.csv("/projectnb/bf528/users/group_5/project_3/mary/DEgene/deseq_output/deseq_CAR_PXR_results.csv")
+DNAD <- read.csv("/projectnb/bf528/users/group_5/project_3/mary/DEgene/deseq_output/deseq_DNA_Damage_results.csv")
+PPARA <- read.csv("/projectnb/bf528/users/group_5/project_3/mary/DEgene/deseq_output/deseq_PPARA_results.csv")
+
+#further subset data to only include genes with |log2FoldChange| > 1 
+CARPXR <- subset(CARPXR, abs(log2FoldChange) > 1)
+DNAD <- subset(DNAD, abs(log2FoldChange) > 1)
+PPARA <- subset(PPARA, abs(log2FoldChange) > 1)
+
+#CAR/PXR had too many genes even after filtering so took top 1000 up-regulated and 1000 down-regulated genes for DAVID analysis 
+top1000 <- head(sort(CARPXR$log2FoldChange,decreasing=TRUE), n = 1000) 
+bottom1000 <- head(sort(CARPXR$log2FoldChange,decreasing=FALSE), n = 1000)
+CARPXR_DAVID <- subset(CARPXR, CARPXR$log2FoldChange %in% top1000 | CARPXR$log2FoldChange %in% bottom1000)
+```
+
+# heatmap 
+```{r}
+#read in normalized count files 
+nc_CARPXR <- read.csv("/projectnb/bf528/users/group_5/project_3/mary/DEgene/deseq_output/deseq_CAR_PXR_norm_counts.csv")
+nc_DNAD <- read.csv("/projectnb/bf528/users/group_5/project_3/mary/DEgene/deseq_output/deseq_DNA_Damage_norm_counts.csv")
+nc_PPARA <- read.csv("/projectnb/bf528/users/group_5/project_3/mary/DEgene/deseq_output/deseq_PPARA_norm_counts.csv")
+
+#set a name for the ID column - easier for merging 
+colnames(nc_CARPXR)[1] <- "ID"
+colnames(nc_DNAD)[1] <- "ID"
+colnames(nc_PPARA)[1] <- "ID"
+
+#averaging control values from two norm count tables that used the same set of control samples
+n <- merge(nc_DNAD[,c("ID", "SRR1178067", "SRR1178068", "SRR1178069")], nc_PPARA[,c("ID", "SRR1178067", "SRR1178068", "SRR1178069")], by = "ID") #pull out control sample values from each table
+control <- as.data.frame(sapply(c("SRR1178067", "SRR1178068", "SRR1178069"), function(x) rowMeans(n[, grep(x, names(n))]))) #calculate average 
+control$ID <- n$ID #add ID names to the table 
+control <- control[,c(4,1,2,3)] #rearrange the columns to have ID first 
+
+#merge all samples to produce a heatmap matrix 
+nc <- merge(nc_DNAD[,1:4], nc_PPARA[,1:4], by = "ID") 
+nc <- merge(nc, nc_CARPXR, by = "ID") 
+nc <- merge(nc, control, by = "ID")
+
+#gene ID list for significant genes in any treatment  
+CARPXR_ID <- CARPXR[,1, drop = F] 
+DNAD_ID <- DNAD[,1, drop = F]
+PPARA_ID <- PPARA[,1, drop = F] 
+all <- unique(rbind(CARPXR_ID,DNAD_ID,PPARA_ID))
+
+#heatmap x-axis lables 
+x_axis <- c("DNA_Damage_78", "DNA_Damage_79", "DNA_Damage_80", "PPARA_63", "PPARA_64", "PPARA_65", "CAR/PXR_15", "CAR/PXR_22", "CAR/PXR_48", "Control_Corn_Oil_35", "Control_CornOil_45", "Control_CornOil_50", "Control_67", "Control_68", "Control_69")
+
+#subset the heatmap matrix by the significant genes and produce final heatmap 
+allnc <- subset(nc, nc$ID %in% all$X)
+rownames(allnc) <- allnc[, 1]
+allnc <- as.matrix(allnc[,-1])
+heatmap(allnc, labCol = x_axis, margins = c(9,1.5), labRow = F, ylab = "Genes")
+
+#heatmap just for treatment groups 
+heatmap(allnc[,1:9], labCol = x_axis, margins = c(9,1.5), labRow = F, ylab = "Genes")
+```
