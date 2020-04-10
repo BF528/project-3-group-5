@@ -4,7 +4,10 @@ A brief description of what this repository is for and what it contains
 
 # Contributors
 
-List contributor names and github user names, or email addresses if desired
+Data Curator: Evie Wan
+Programmer: Eetu Eklund
+Analyst: Salam AlAbdullatif
+Biologist: Mary Yohannes
 
 # Repository Contents
 
