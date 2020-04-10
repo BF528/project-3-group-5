@@ -1,6 +1,5 @@
 # Project Description
-
-A brief description of what this repository is for and what it contains
+In this project we aligned rat short reads to reference genome and performed differential analysis on RNA-seq data as well as microarray expression data to compare the results from our analysis to the literature.
 
 # Contributors
 
