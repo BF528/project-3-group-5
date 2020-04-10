@@ -13,5 +13,11 @@ Biologist: Mary Yohannes
 Data Curator: 
 STAR.qsub: star alignment script \
 multiqc.qsub: multiqc report script \
-multiqc_report_1.html: STAR and FASTQC output \
+multiqc_report_1.html: STAR and FASTQC output 
+
+Programmer: 
+
+Analyst: 
+
+Biologist:
 
