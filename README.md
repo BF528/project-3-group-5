@@ -10,7 +10,7 @@ Biologist: Mary Yohannes
 
 # Repository Contents
 
-Data Curator: 
+Data Curator: \
 STAR.qsub: star alignment script \
 multiqc.qsub: multiqc report script \
 multiqc_report_1.html: STAR and FASTQC output 
