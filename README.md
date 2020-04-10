@@ -10,4 +10,8 @@ Biologist: Mary Yohannes
 
 # Repository Contents
 
-Provide a brief description of each script/code file in this repo, what it does, and how to execute it
+Data Curator: 
+STAR.qsub: star alignment script \
+multiqc.qsub: multiqc report script \
+multiqc_report_1.html: STAR and FASTQC output \
+
