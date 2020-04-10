@@ -1,0 +1,12 @@
+#!/bin/bash
+
+#$ -P bf528
+#$ -cwd
+
+source /etc/bashrc
+
+module load python2
+module load multiqc
+
+multiqc STAR_out/
+

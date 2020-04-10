@@ -1,0 +1,18 @@
+
+#$ -P bf528
+#$ -cwd
+#$ -pe omp 16
+#
+source /etc/bashrc
+
+module load gcc star/2.6.0c
+
+index=/project/bf528/project_3/reference/rn4_STAR
+
+STAR --genomeDir $index --runThreadN 16 --readFilesCommand zcat \
+--readFilesIn $1 $2 \
+--outFileNamePrefix $3 \
+--outFilterType BySJout \
+--outSAMtype BAM SortedByCoordinate \
+--alignSJoverhangMin 8 \
+--alignSJDBoverhangMin 1 
